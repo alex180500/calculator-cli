@@ -1,7 +1,7 @@
 [project]
 name = "calculator-cli"
 version = "0.1.0"
-description = "Interactive calculator REPL with mpmath and utilities"
+description = "A calculator CLI application based on Python and mpmath"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = ["mpmath>=1.4.1"]
