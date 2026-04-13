@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 import os
 from pathlib import Path
 import urllib.error
@@ -9,7 +8,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from mpmath import mpf, nstr
+from mpmath import mpf
 
 ECB_DAILY_XML_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 
@@ -22,36 +21,12 @@ class CurrencyRateError(RuntimeError):
 class RateSnapshot:
     rate_date: str
     rates: dict[str, mpf]
-    loaded_at: datetime
-    source: str
-
-
-@dataclass(frozen=True, slots=True)
-class ConversionDisplay:
-    object_id: int
-    amount: mpf
-    source_currency: str
-    target_currency: str
-    rate_date: str
-    loaded_at: datetime
-    source: str
-
-    def format(self) -> str:
-        timestamp = self.loaded_at.isoformat(sep=" ", timespec="seconds")
-        return (
-            f"{nstr(self.amount, 16)} {self.target_currency} "
-            f"[rate date: {self.rate_date}, data loaded at: {timestamp}, source: {self.source}]"
-        )
-
-
-def _local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1]
 
 
 class ECBReferenceRates:
     def __init__(self) -> None:
         self._snapshot: RateSnapshot | None = None
-        self._last_conversion: ConversionDisplay | None = None
+        self._last_conversion: tuple[int, str] | None = None
 
     def _cache_path(self) -> Path:
         if os.name == "nt":
@@ -62,13 +37,13 @@ class ECBReferenceRates:
             base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
         return base / "calculator-cli" / "ecb_rates.xml"
 
-    def _parse(self, payload: bytes, loaded_at: datetime, source: str) -> RateSnapshot:
+    def _parse(self, payload: bytes) -> RateSnapshot:
         root = ET.fromstring(payload)
         cube_time = next(
             (
                 node
                 for node in root.iter()
-                if _local_name(node.tag) == "Cube" and "time" in node.attrib
+                if node.tag.rsplit("}", 1)[-1] == "Cube" and "time" in node.attrib
             ),
             None,
         )
@@ -79,7 +54,7 @@ class ECBReferenceRates:
         rates: dict[str, mpf] = {"EUR": mpf("1")}
 
         for cube in cube_time:
-            if _local_name(cube.tag) != "Cube":
+            if cube.tag.rsplit("}", 1)[-1] != "Cube":
                 continue
             currency = cube.attrib.get("currency")
             rate = cube.attrib.get("rate")
@@ -90,21 +65,14 @@ class ECBReferenceRates:
         if len(rates) == 1:
             raise CurrencyRateError("ECB response did not include any exchange rates.")
 
-        return RateSnapshot(
-            rate_date=rate_date,
-            rates=rates,
-            loaded_at=loaded_at,
-            source=source,
-        )
+        return RateSnapshot(rate_date=rate_date, rates=rates)
 
     def _load_cache(self) -> RateSnapshot | None:
         cache_path = self._cache_path()
         if not cache_path.exists():
             return None
 
-        payload = cache_path.read_bytes()
-        loaded_at = datetime.fromtimestamp(cache_path.stat().st_mtime).astimezone()
-        snapshot = self._parse(payload, loaded_at=loaded_at, source="cache")
+        snapshot = self._parse(cache_path.read_bytes())
         self._snapshot = snapshot
         return snapshot
 
@@ -117,8 +85,7 @@ class ECBReferenceRates:
         try:
             with urllib.request.urlopen(ECB_DAILY_XML_URL, timeout=10) as response:
                 payload = response.read()
-            loaded_at = datetime.now().astimezone()
-            snapshot = self._parse(payload, loaded_at=loaded_at, source="network")
+            snapshot = self._parse(payload)
             self._snapshot = snapshot
             try:
                 self._store_cache(payload)
@@ -157,29 +124,16 @@ class ECBReferenceRates:
         converted = (
             amount_in_eur if target == "EUR" else amount_in_eur * snapshot.rates[target]
         )
-        self._last_conversion = ConversionDisplay(
-            object_id=id(converted),
-            amount=converted,
-            source_currency=source,
-            target_currency=target,
-            rate_date=snapshot.rate_date,
-            loaded_at=snapshot.loaded_at,
-            source=snapshot.source,
-        )
+        self._last_conversion = (id(converted), snapshot.rate_date)
         return converted
-
-    def currencies(self, refresh: bool = False) -> list[str]:
-        return sorted(self.latest(refresh=refresh).rates)
-
-    def date(self, refresh: bool = False) -> str:
-        return self.latest(refresh=refresh).rate_date
 
     def format_conversion(self, value: Any) -> str | None:
         if self._last_conversion is None:
             return None
-        if id(value) != self._last_conversion.object_id:
+        object_id, rate_date = self._last_conversion
+        if id(value) != object_id:
             return None
-        return self._last_conversion.format()
+        return f"on {rate_date}"
 
 
 ecb_rates = ECBReferenceRates()
@@ -189,22 +143,6 @@ def convert(
     amount: Any, from_currency: str, to_currency: str, refresh: bool = False
 ) -> mpf:
     return ecb_rates.convert(amount, from_currency, to_currency, refresh=refresh)
-
-
-def fx_rate(currency: str, refresh: bool = False) -> mpf:
-    snapshot = ecb_rates.latest(refresh=refresh)
-    code = currency.upper()
-    if code not in snapshot.rates:
-        raise CurrencyRateError(f"Unsupported currency: {code}")
-    return snapshot.rates[code]
-
-
-def fx_date(refresh: bool = False) -> str:
-    return ecb_rates.date(refresh=refresh)
-
-
-def fx_currencies(refresh: bool = False) -> list[str]:
-    return ecb_rates.currencies(refresh=refresh)
 
 
 def format_conversion(value: Any) -> str | None:
