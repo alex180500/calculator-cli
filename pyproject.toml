@@ -11,9 +11,8 @@ calc = "calculator_cli.cli:main"
 c = "calculator_cli.cli:main"
 
 [build-system]
-requires = ["setuptools>=70", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["calculator_cli*"]
+[tool.hatch.build.targets.wheel]
+packages = ["calculator_cli"]
