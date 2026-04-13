@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-import os
+import subprocess
 import sys
 
 HELP_BANNER = (
     "calculator-cli\n"
+
     "Loaded: mpmath.*, convert(amount, from_currency, to_currency)\n"
+
     "Uses the Python 3.13+ interactive shell when available\n"
-    "convert(...) prints the ECB rate date and rate-load time\n"
+    "convert(...) pretty prints the result with the ECB rate date\n"
+    "ECB FX cache lives in your per-user cache directory\n"
     "Precision: mp.dps = 100\n"
+    
     "Examples:\n"
     "  sqrt(2)\n"
     "  quad(lambda x: exp(-x**2), [0, inf])\n"
@@ -23,15 +27,15 @@ def main(argv: list[str] | None = None) -> int:
         print(HELP_BANNER)
         return 0
 
-    os.execv(
-        sys.executable,
+    subprocess.run(
         [
             sys.executable,
             "-q",
             "-i",
-            "-m",
-            "calculator_cli.repl_bootstrap",
+            "-c",
+            "from calculator_cli.repl_bootstrap import bootstrap; bootstrap(globals())",
         ],
+        check=False,
     )
     return 0
 

@@ -19,7 +19,10 @@ def displayhook(value: Any) -> None:
     setattr(builtins, "_", value)
     formatted_conversion = format_conversion(value)
     if formatted_conversion is not None:
-        print(formatted_conversion)
+        if sys.stdout.isatty():
+            print(f"\x1b[3m{formatted_conversion}\x1b[0m")
+        else:
+            print(formatted_conversion)
         return
 
     try:
