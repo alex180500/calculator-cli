@@ -1,13 +1,18 @@
-from dataclasses import dataclass
+import json
 import os
+from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
+import mpmath as mp
 from mpmath import mpf
 
 ECB_DAILY_XML_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+CACHE_DIR_ENV = "CALCULATOR_CLI_CACHE_DIR"
+CACHE_FILE_NAME = "ecb_rates.json"
 
 
 class CurrencyRateError(RuntimeError):
@@ -17,25 +22,122 @@ class CurrencyRateError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class RateSnapshot:
     rate_date: str
+    retrieved_on: str
     rates: dict[str, mpf]
 
 
-class ECBReferenceRates:
-    def __init__(self) -> None:
-        self._snapshot: RateSnapshot | None = None
-        self._last_conversion: tuple[int, str] | None = None
+def default_cache_dir() -> Path:
+    if os.name == "nt":
+        return Path(
+            os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
+        ) / "calculator-cli"
+    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / (
+        "calculator-cli"
+    )
 
-    def _cache_path(self) -> Path:
-        if os.name == "nt":
-            base = Path(
-                os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
-            )
-        else:
-            base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
-        return base / "calculator-cli" / "ecb_rates.xml"
 
-    def _parse(self, payload: bytes) -> RateSnapshot:
-        root = ET.fromstring(payload)
+def resolve_cache_dir(cache_dir: str | os.PathLike[str] | None = None) -> Path:
+    if cache_dir is None:
+        return default_cache_dir()
+    return Path(cache_dir).expanduser().resolve()
+
+
+def is_mpmath_value(value: object) -> bool:
+    return type(value).__module__.startswith("mpmath")
+
+
+def format_mpmath_value(value: object) -> str:
+    chopped = mp.chop(value)
+    if isinstance(chopped, (mp.mpf, mp.mpc)) and chopped == 0:
+        return "0"
+    return str(chopped)
+
+
+class FXRates:
+    def __init__(
+        self,
+        xml_url: str = ECB_DAILY_XML_URL,
+        cache_dir: str | os.PathLike[str] | None = None,
+    ) -> None:
+        self.xml_url = xml_url
+        self.cache_dir = resolve_cache_dir(cache_dir)
+        self.cache_path = self.cache_dir / CACHE_FILE_NAME
+        self.snapshot: RateSnapshot | None = None
+        self._cache_loaded = False
+        self._last_failed_refresh_on: str | None = None
+        self._last_refresh_error: CurrencyRateError | None = None
+        self._last_conversion: tuple[int, str, str] | None = None
+
+    def _today(self) -> str:
+        return date.today().isoformat()
+
+    def _load_cache(self) -> None:
+        if self._cache_loaded:
+            return
+
+        self._cache_loaded = True
+        if not self.cache_path.exists():
+            return
+
+        try:
+            payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+
+        if not isinstance(payload, dict):
+            return
+
+        rate_date = payload.get("rate_date")
+        retrieved_on = payload.get("retrieved_on")
+        rates = payload.get("rates")
+        if (
+            not isinstance(rate_date, str)
+            or not isinstance(retrieved_on, str)
+            or not isinstance(rates, dict)
+        ):
+            return
+
+        try:
+            parsed_rates = {
+                currency: mpf(rate)
+                for currency, rate in rates.items()
+                if isinstance(currency, str) and isinstance(rate, str)
+            }
+        except (TypeError, ValueError):
+            return
+
+        if len(parsed_rates) != len(rates) or "EUR" not in parsed_rates:
+            return
+
+        self.snapshot = RateSnapshot(
+            rate_date=rate_date,
+            retrieved_on=retrieved_on,
+            rates=parsed_rates,
+        )
+
+    def _write_cache(self) -> None:
+        if self.snapshot is None:
+            return
+
+        payload = {
+            "rate_date": self.snapshot.rate_date,
+            "retrieved_on": self.snapshot.retrieved_on,
+            "rates": {
+                currency: str(rate) for currency, rate in self.snapshot.rates.items()
+            },
+        }
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_path.write_text(
+            json.dumps(payload, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    def _parse_rates(self, payload: bytes) -> tuple[str, dict[str, mpf]]:
+        try:
+            root = ET.fromstring(payload)
+        except ET.ParseError as exc:
+            raise CurrencyRateError("ECB response was not valid XML.") from exc
+
         cube_time = next(
             (
                 node
@@ -47,60 +149,80 @@ class ECBReferenceRates:
         if cube_time is None:
             raise CurrencyRateError("ECB response did not include a rates date.")
 
-        rate_date = cube_time.attrib["time"]
         rates: dict[str, mpf] = {"EUR": mpf("1")}
-
         for cube in cube_time:
             if cube.tag.rsplit("}", 1)[-1] != "Cube":
                 continue
+
             currency = cube.attrib.get("currency")
             rate = cube.attrib.get("rate")
             if not currency or not rate:
                 continue
-            rates[currency.upper()] = mpf(rate)
+
+            try:
+                rates[currency.upper()] = mpf(rate)
+            except (TypeError, ValueError) as exc:
+                raise CurrencyRateError(
+                    f"ECB response included an invalid rate for {currency!r}."
+                ) from exc
 
         if len(rates) == 1:
             raise CurrencyRateError("ECB response did not include any exchange rates.")
 
-        return RateSnapshot(rate_date=rate_date, rates=rates)
+        return cube_time.attrib["time"], rates
 
-    def _load_cache(self) -> RateSnapshot | None:
-        cache_path = self._cache_path()
-        if not cache_path.exists():
-            return None
-
-        snapshot = self._parse(cache_path.read_bytes())
-        self._snapshot = snapshot
-        return snapshot
-
-    def _store_cache(self, payload: bytes) -> None:
-        cache_path = self._cache_path()
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_bytes(payload)
-
-    def _fetch(self) -> RateSnapshot:
+    def _fetch_rates(self) -> tuple[str, dict[str, mpf]]:
         try:
-            with urllib.request.urlopen(ECB_DAILY_XML_URL, timeout=10) as response:
+            with urllib.request.urlopen(self.xml_url, timeout=10) as response:
                 payload = response.read()
-            snapshot = self._parse(payload)
-            self._snapshot = snapshot
-            try:
-                self._store_cache(payload)
-            except OSError:
-                pass
-            return snapshot
-        except (urllib.error.URLError, OSError, ET.ParseError) as exc:
-            cached = self._load_cache()
-            if cached is not None:
-                return cached
+        except urllib.error.URLError as exc:
             raise CurrencyRateError(
-                f"Unable to fetch ECB exchange rates and no cached data is available: {exc}"
+                f"Unable to fetch ECB exchange rates: {exc}"
             ) from exc
 
-    def latest(self, refresh: bool = False) -> RateSnapshot:
-        if not refresh and self._snapshot is not None:
-            return self._snapshot
-        return self._fetch()
+        return self._parse_rates(payload)
+
+    def refresh_exchange(self, force: bool = False) -> str:
+        self._load_cache()
+        today = self._today()
+
+        if (
+            not force
+            and self.snapshot is not None
+            and self.snapshot.retrieved_on == today
+        ):
+            return self.snapshot.rate_date
+
+        if not force and self._last_failed_refresh_on == today:
+            if self.snapshot is not None:
+                return self.snapshot.rate_date
+            if self._last_refresh_error is not None:
+                raise self._last_refresh_error
+            raise CurrencyRateError("Exchange rates are not available.")
+
+        try:
+            rate_date, rates = self._fetch_rates()
+        except CurrencyRateError as exc:
+            self._last_failed_refresh_on = today
+            self._last_refresh_error = exc
+            if self.snapshot is not None:
+                return self.snapshot.rate_date
+            raise
+
+        self.snapshot = RateSnapshot(
+            rate_date=rate_date,
+            retrieved_on=today,
+            rates=rates,
+        )
+        self._last_failed_refresh_on = None
+        self._last_refresh_error = None
+
+        try:
+            self._write_cache()
+        except OSError:
+            pass
+
+        return rate_date
 
     def convert(
         self,
@@ -109,42 +231,80 @@ class ECBReferenceRates:
         to_currency: str,
         refresh: bool = False,
     ) -> mpf:
-        snapshot = self.latest(refresh=refresh)
+        if refresh:
+            self.refresh_exchange(force=True)
+        else:
+            self.refresh_exchange(force=False)
+
+        if self.snapshot is None:
+            if self._last_refresh_error is not None:
+                raise self._last_refresh_error
+            raise CurrencyRateError("Exchange rates are not available.")
+
         source = from_currency.upper()
         target = to_currency.upper()
-
-        if source not in snapshot.rates:
+        if source not in self.snapshot.rates:
             raise CurrencyRateError(f"Unsupported source currency: {source}")
-        if target not in snapshot.rates:
+        if target not in self.snapshot.rates:
             raise CurrencyRateError(f"Unsupported target currency: {target}")
 
         amount_value = mpf(amount)
         amount_in_eur = (
-            amount_value if source == "EUR" else amount_value / snapshot.rates[source]
+            amount_value
+            if source == "EUR"
+            else amount_value / self.snapshot.rates[source]
         )
         converted = (
-            amount_in_eur if target == "EUR" else amount_in_eur * snapshot.rates[target]
+            amount_in_eur
+            if target == "EUR"
+            else amount_in_eur * self.snapshot.rates[target]
         )
-        self._last_conversion = (id(converted), snapshot.rate_date)
+        self._last_conversion = (id(converted), target, self.snapshot.rate_date)
         return converted
 
     def format_conversion(self, value: object) -> str | None:
         if self._last_conversion is None:
             return None
-        object_id, rate_date = self._last_conversion
+
+        object_id, currency, rate_date = self._last_conversion
         if id(value) != object_id:
             return None
-        return f"on {rate_date}"
+
+        self._last_conversion = None
+        return f"{format_mpmath_value(value)} {currency} [on {rate_date}]"
 
 
-ecb_rates = ECBReferenceRates()
+_default_rates: FXRates | None = None
+
+
+def configure_default_rates(
+    cache_dir: str | os.PathLike[str] | None = None,
+) -> FXRates:
+    global _default_rates
+    _default_rates = FXRates(cache_dir=cache_dir)
+    return _default_rates
+
+
+def get_default_rates() -> FXRates:
+    global _default_rates
+    if _default_rates is None:
+        _default_rates = FXRates(cache_dir=os.environ.get(CACHE_DIR_ENV))
+    return _default_rates
+
+
+def refresh_exchange(force: bool = False) -> str:
+    return get_default_rates().refresh_exchange(force=force)
 
 
 def convert(
-    amount: object, from_currency: str, to_currency: str, refresh: bool = False
+    amount: object,
+    from_currency: str,
+    to_currency: str,
+    refresh: bool = False,
 ) -> mpf:
-    return ecb_rates.convert(amount, from_currency, to_currency, refresh=refresh)
-
-
-def format_conversion(value: object) -> str | None:
-    return ecb_rates.format_conversion(value)
+    return get_default_rates().convert(
+        amount,
+        from_currency,
+        to_currency,
+        refresh=refresh,
+    )
