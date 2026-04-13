@@ -5,7 +5,7 @@
 It is designed for fast interactive use:
 - `calc` and `c` launch the REPL
 - `mpmath` gives you arbitrary precision math
-- `convert(...)` pulls ECB FX rates and prints the rate date plus load time
+- `convert(...)` pulls ECB FX rates and prints the rate date
 - Python 3.13+ gets the modern interactive shell instead of `code.interact()`
 
 ## Install
@@ -45,16 +45,15 @@ convert(100, "USD", "EUR")
 convert(250, "GBP", "JPY")
 ```
 
-The printed result includes:
-- converted amount
-- ECB rate date
-- time the rate data was loaded
-- whether the data came from the network or local cache
+The printed conversion result is minimal: it shows only `on YYYY-MM-DD`, rendered in italics when your terminal supports ANSI styling.
 
 ## Notes
 
 - The package requires Python `3.13` or newer.
 - FX data is fetched directly from the ECB XML feed and cached locally if the network is unavailable.
+- The cache is stored under your per-user cache directory:
+  - Windows: `%LOCALAPPDATA%\calculator-cli\ecb_rates.xml`
+  - Unix-like systems: `${XDG_CACHE_HOME:-~/.cache}/calculator-cli/ecb_rates.xml`
 - The REPL namespace stays minimal: `mpmath` names plus `convert`.
 
 ## License
