@@ -1,0 +1,19 @@
+[project]
+name = "calculator-cli"
+version = "0.1.0"
+description = "Interactive calculator REPL with mpmath and utilities"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["mpmath>=1.4.1"]
+
+[project.scripts]
+calc = "calculator_cli.cli:main"
+c = "calculator_cli.cli:main"
+
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["calculator_cli*"]
