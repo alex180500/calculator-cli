@@ -1,12 +1,9 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 import os
 from pathlib import Path
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from typing import Any
 
 from mpmath import mpf
 
@@ -106,7 +103,11 @@ class ECBReferenceRates:
         return self._fetch()
 
     def convert(
-        self, amount: Any, from_currency: str, to_currency: str, refresh: bool = False
+        self,
+        amount: object,
+        from_currency: str,
+        to_currency: str,
+        refresh: bool = False,
     ) -> mpf:
         snapshot = self.latest(refresh=refresh)
         source = from_currency.upper()
@@ -127,7 +128,7 @@ class ECBReferenceRates:
         self._last_conversion = (id(converted), snapshot.rate_date)
         return converted
 
-    def format_conversion(self, value: Any) -> str | None:
+    def format_conversion(self, value: object) -> str | None:
         if self._last_conversion is None:
             return None
         object_id, rate_date = self._last_conversion
@@ -140,10 +141,10 @@ ecb_rates = ECBReferenceRates()
 
 
 def convert(
-    amount: Any, from_currency: str, to_currency: str, refresh: bool = False
+    amount: object, from_currency: str, to_currency: str, refresh: bool = False
 ) -> mpf:
     return ecb_rates.convert(amount, from_currency, to_currency, refresh=refresh)
 
 
-def format_conversion(value: Any) -> str | None:
+def format_conversion(value: object) -> str | None:
     return ecb_rates.format_conversion(value)

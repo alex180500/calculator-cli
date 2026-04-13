@@ -1,12 +1,7 @@
-from __future__ import annotations
-
-from collections.abc import MutableMapping
-from typing import Any
-
 from calculator_cli.repl_support import build_namespace, install_displayhook
 
 
-def bootstrap(namespace: MutableMapping[str, Any] | None = None) -> None:
+def bootstrap(namespace: dict[str, object] | None = None) -> None:
     namespace = globals() if namespace is None else namespace
     namespace.update(build_namespace())
     install_displayhook()

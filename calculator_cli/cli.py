@@ -1,18 +1,13 @@
-from __future__ import annotations
-
 import subprocess
 import sys
 
 HELP_BANNER = (
-    "calculator-cli\n"
-
-    "Loaded: mpmath.*, convert(amount, from_currency, to_currency)\n"
-
+    "calculator-cli\n\n"
+    "Loaded: mpmath.*, convert(amount, from_currency, to_currency)\n\n"
     "Uses the Python 3.13+ interactive shell when available\n"
     "convert(...) pretty prints the result with the ECB rate date\n"
     "ECB FX cache lives in your per-user cache directory\n"
-    "Precision: mp.dps = 100\n"
-    
+    "Precision: mp.dps = 100\n\n"
     "Examples:\n"
     "  sqrt(2)\n"
     "  quad(lambda x: exp(-x**2), [0, inf])\n"

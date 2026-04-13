@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 import builtins
-import inspect
 import sys
-from typing import Any
+from types import ModuleType
 
 import mpmath as mp
 
@@ -12,7 +9,7 @@ from calculator_cli.fx import convert, format_conversion
 mp.mp.dps = 100
 
 
-def displayhook(value: Any) -> None:
+def displayhook(value: object) -> None:
     if value is None:
         return
 
@@ -35,19 +32,17 @@ def install_displayhook() -> None:
     sys.displayhook = displayhook
 
 
-def _is_public_mpmath_name(name: str, value: Any) -> bool:
+def _is_public_mpmath_name(name: str, value: object) -> bool:
     if name.startswith("_"):
         return False
     if name in {"mp", "fp", "iv"}:
         return False
-    if inspect.isclass(value) or inspect.ismodule(value):
-        return False
-    if value.__class__.__name__.endswith("Context"):
+    if isinstance(value, type) or isinstance(value, ModuleType):
         return False
     return True
 
 
-def build_namespace() -> dict[str, Any]:
+def build_namespace() -> dict[str, object]:
     namespace = {
         name: value
         for name in dir(mp)
