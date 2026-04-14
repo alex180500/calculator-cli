@@ -96,7 +96,6 @@ jobs:
             process.env.GITHUB_OUTPUT,
             `notes<<${delimiter}\n${notes}\n${delimiter}\n`,
           );
-NODE
           echo "✅ Release notes generated."
 
       - name: Create GitHub release
