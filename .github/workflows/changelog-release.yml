@@ -29,6 +29,8 @@ jobs:
 
           echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${current_version}" >> "$GITHUB_OUTPUT"
+          previous_tag="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "version_changed=true" >> "$GITHUB_OUTPUT"
@@ -52,16 +54,18 @@ jobs:
 
       - name: Generate conventional changelog
         if: steps.version_check.outputs.version_changed == 'true'
-        id: changelog
         shell: bash
         run: |
-          notes="$(npx conventional-changelog -p conventionalcommits -r 1)"
-
+          cat > conventional-changelog-context.json <<EOF
           {
-            echo "notes<<EOF"
-            printf '%s\n' "$notes"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+            "currentTag": "${{ steps.version_check.outputs.tag }}",
+            "previousTag": "${{ steps.version_check.outputs.previous_tag }}",
+            "version": "${{ steps.version_check.outputs.current_version }}",
+            "linkCompare": true
+          }
+EOF
+
+          npx conventional-changelog -p conventionalcommits -r 1 --stdout -i /dev/null -c conventional-changelog-context.json > release-notes.md
 
       - name: Create and push tag
         if: steps.version_check.outputs.version_changed == 'true'
@@ -114,13 +118,13 @@ jobs:
         uses: actions/github-script@v9
         env:
           TAG_NAME: ${{ steps.version_check.outputs.tag }}
-          NOTES: ${{ steps.changelog.outputs.notes }}
         with:
           github-token: ${{ github.token }}
           script: |
+            const fs = require("node:fs");
             const { owner, repo } = context.repo;
             const tagName = process.env.TAG_NAME;
-            const notes = process.env.NOTES ?? "";
+            const notes = fs.readFileSync("release-notes.md", "utf8");
 
             let release;
             try {
