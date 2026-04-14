@@ -1,5 +1,4 @@
 import builtins
-import code
 import os
 import sys
 from collections.abc import Callable
@@ -105,14 +104,6 @@ class ReplDisplayHook:
             self.default_hook(value)
 
 
-class CalculatorConsole(code.InteractiveConsole):
-    def raw_input(self, prompt: str = "") -> str:
-        line = super().raw_input(prompt)
-        if line.strip() in {"q", "quit", "exit"}:
-            raise EOFError
-        return line
-
-
 def prepare_session(
     namespace: dict[str, object] | None = None,
     cache_dir: str | None = None,
@@ -131,15 +122,4 @@ def prepare_session(
         if rates.snapshot is None:
             print(f"Warning: {exc}", file=sys.stderr)
 
-    return rates
-
-
-def start_console(cache_dir: str | None = None) -> FXRates:
-    namespace: dict[str, object] = {}
-    rates = prepare_session(namespace, cache_dir=cache_dir)
-    sys.ps1 = "\x1b[35m:>\x1b[0m "
-    CalculatorConsole(locals=namespace, local_exit=True).interact(
-        banner="",
-        exitmsg="",
-    )
     return rates
