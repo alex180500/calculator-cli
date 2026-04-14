@@ -2,10 +2,38 @@
 
 `calculator-cli` opens the standard Python REPL with `mpmath` loaded into the namespace and ECB exchange conversion built in.
 
-## Install
+## REPL Usage
 
-```bash
-uv sync
+Normal Python expressions stay normal Python expressions:
+
+```python
+1 / 3
+2 ** 10
+```
+
+The `_` variable is stored as the last result and can be used as in the usual Python REPL.
+
+`mpmath` names are already loaded, so `mpmath` expressions work directly:
+
+```python
+sin(pi)
+sqrt(2)
+quad(lambda x: exp(-x**2), [0, inf])
+```
+
+`sin(pi)` is displayed as `0` because the REPL display hook uses `mpmath.chop(...)` before printing.
+
+Exchange helpers are also available:
+
+```python
+convert(100, "EUR", "USD")
+refresh_exchange()
+```
+
+`convert(...)` returns an `mpmath.mpf`, so `_` stays numeric and can be reused in later calculations. In the REPL it is displayed as:
+
+```text
+116.84 USD [on 2026-04-13]
 ```
 
 ## Run
@@ -27,38 +55,6 @@ Custom cache directory:
 uv run calculator --cache ./cache
 ```
 
-## REPL
-
-Normal Python expressions stay normal Python expressions:
-
-```python
-1 / 3
-2 ** 10
-```
-
-`mpmath` names are already loaded, so `mpmath` expressions work directly:
-
-```python
-sin(pi)
-sqrt(2)
-quad(lambda x: exp(-x**2), [0, inf])
-```
-
-`sin(pi)` is displayed as `0` because the REPL display hook uses `mpmath.chop(...)` before printing.
-
-Exchange helpers are also available:
-
-```python
-convert(100, "EUR", "USD")
-refresh_exchange()
-_
-```
-
-`convert(...)` returns an `mpmath.mpf`, so `_` stays numeric and can be reused in later calculations. In the REPL it is displayed as:
-
-```text
-116.84 USD [on 2026-04-13]
-```
 
 ## Exchange cache
 
@@ -73,6 +69,15 @@ Default cache location:
 
 - Windows: `%LOCALAPPDATA%\calculator-cli\ecb_rates.json`
 - Unix-like systems: `${XDG_CACHE_HOME:-~/.cache}/calculator-cli/ecb_rates.json`
+
+
+## Local Install
+
+```bash
+uv sync
+
+uv run calculator
+```
 
 ## License
 
