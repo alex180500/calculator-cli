@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag_name="$(git describe --tags --abbrev=0 --match 'v*')"
+            tag_name="$(git for-each-ref --sort=-creatordate --format '%(refname:short)' refs/tags/v* | head -n 1)"
           else
             tag_name="${GITHUB_REF_NAME}"
           fi
@@ -34,6 +34,7 @@ jobs:
 
           git checkout "$tag_name"
           echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "release_version=${tag_name#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -43,16 +44,26 @@ jobs:
       - name: Install changelog tools
         shell: bash
         run: |
-          npm install --no-save conventional-changelog conventional-changelog-conventionalcommits
+          npm install --no-save conventional-changelog@7.1.1 conventional-changelog-conventionalcommits@9.1.0
           echo "✅ Dependencies installed."
 
       - name: Generate conventional changelog
         id: changelog
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release_tag.outputs.release_version }}
         run: |
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          npx conventional-changelog -p conventionalcommits -r 1 >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          notes="$(npx conventional-changelog -p conventionalcommits -r 1 --tag-prefix v)"
+          notes="$(printf '%s\n' "$notes" | awk -v version="$RELEASE_VERSION" '
+            index($0, "release " version) == 0 &&
+            index($0, "release: " version) == 0
+          ')"
+
+          {
+            echo "notes<<EOF"
+            printf '%s\n' "$notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           echo "✅ Release notes generated."
 
       - name: Create GitHub release
@@ -67,14 +78,40 @@ jobs:
             const tagName = process.env.TAG_NAME;
             const notes = process.env.NOTES ?? "";
 
-            await github.rest.repos.createRelease({
-              owner,
-              repo,
-              tag_name: tagName,
-              name: tagName,
-              body: notes,
-              draft: false,
-              prerelease: false,
-            });
+            let release;
+            try {
+              release = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag: tagName,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
 
-            core.info(`✅ GitHub release ${tagName} created.`);
+            if (release) {
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: release.data.id,
+                tag_name: tagName,
+                name: tagName,
+                body: notes,
+                draft: false,
+                prerelease: false,
+              });
+              core.info(`✅ GitHub release ${tagName} updated.`);
+            } else {
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tagName,
+                name: tagName,
+                body: notes,
+                draft: false,
+                prerelease: false,
+              });
+              core.info(`✅ GitHub release ${tagName} created.`);
+            }
