@@ -7,7 +7,6 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
-import mpmath as mp
 from mpmath import mpf
 
 ECB_DAILY_XML_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
@@ -28,29 +27,16 @@ class RateSnapshot:
 
 def default_cache_dir() -> Path:
     if os.name == "nt":
-        return Path(
-            os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
-        ) / "calculator-cli"
-    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / (
-        "calculator-cli"
-    )
+        cache_path = os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
+    else:
+        cache_path = os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
+    return Path(cache_path) / "calculator-cli"
 
 
 def resolve_cache_dir(cache_dir: str | os.PathLike[str] | None = None) -> Path:
     if cache_dir is None:
         return default_cache_dir()
     return Path(cache_dir).expanduser().resolve()
-
-
-def is_mpmath_value(value: object) -> bool:
-    return type(value).__module__.startswith("mpmath")
-
-
-def format_mpmath_value(value: object) -> str:
-    chopped = mp.chop(value)
-    if isinstance(chopped, (mp.mpf, mp.mpc)) and chopped == 0:
-        return "0"
-    return str(chopped)
 
 
 class FXRates:
@@ -66,7 +52,6 @@ class FXRates:
         self._cache_loaded = False
         self._last_failed_refresh_on: str | None = None
         self._last_refresh_error: CurrencyRateError | None = None
-        self._last_conversion: tuple[int, str, str] | None = None
 
     def _today(self) -> str:
         return date.today().isoformat()
@@ -259,19 +244,7 @@ class FXRates:
             if target == "EUR"
             else amount_in_eur * self.snapshot.rates[target]
         )
-        self._last_conversion = (id(converted), target, self.snapshot.rate_date)
         return converted
-
-    def format_conversion(self, value: object) -> str | None:
-        if self._last_conversion is None:
-            return None
-
-        object_id, currency, rate_date = self._last_conversion
-        if id(value) != object_id:
-            return None
-
-        self._last_conversion = None
-        return f"{format_mpmath_value(value)} {currency} [on {rate_date}]"
 
 
 _default_rates: FXRates | None = None

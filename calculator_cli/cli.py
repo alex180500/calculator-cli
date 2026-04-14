@@ -1,52 +1,38 @@
 import argparse
-import os
-from pathlib import Path
-import subprocess
-import sys
 
-from calculator_cli.fx import CACHE_DIR_ENV
+from calculator_cli.repl import start_console
 
-BOOTSTRAP_CODE = "from calculator_cli.repl import bootstrap; bootstrap(globals())"
+HELP_TEXT = """\x1b[1;34mExtra functions:\x1b[0m\n
+  \x1b[36mconvert\x1b[0m(\x1b[33mamount\x1b[0m, \x1b[33mfrom_currency\x1b[0m, \x1b[33mto_currency\x1b[0m)\n
+  \x1b[36mrefresh_exchange\x1b[0m()\n\n
+
+\x1b[1;34mExamples:\x1b[0m\n
+  1 / 3\n
+  e**2 + 1\n
+  sin(pi)\n
+  convert(100, "EUR", "USD")\n
+  refresh_exchange()\n
+"""
 
 
-def build_parser() -> argparse.ArgumentParser:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=Path(sys.argv[0]).name or "calculator",
-        description=(
-            "Open the standard Python REPL with public mpmath names plus "
-            "convert(...) and refresh_exchange()."
-        ),
+        prog="calculator",
+        description="A calculator REPL CLI with mpmath and ECB exchange rates",
+        epilog=HELP_TEXT,
     )
     parser.add_argument(
         "--cache",
         metavar="DIR",
         help="store the ECB cache in DIR/ecb_rates.json",
     )
-    return parser
-
-
-def repl_command(python_executable: str | None = None) -> list[str]:
-    executable = sys.executable if python_executable is None else python_executable
-    return [executable, "-q", "-i", "-c", BOOTSTRAP_CODE]
-
-
-def build_repl_env(cache_dir: str | None = None) -> dict[str, str]:
-    env = os.environ.copy()
-    if cache_dir:
-        env[CACHE_DIR_ENV] = str(Path(cache_dir).expanduser().resolve())
-    return env
+    return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    completed = subprocess.run(
-        repl_command(),
-        check=False,
-        env=build_repl_env(args.cache),
-    )
-    return completed.returncode
+    args = parse_args(argv)
+    start_console(cache_dir=args.cache)
+    return 0
 
 
 if __name__ == "__main__":
