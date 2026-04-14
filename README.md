@@ -1,6 +1,6 @@
 # calculator-cli
 
-`calculator-cli` opens the standard Python REPL with `mpmath` loaded into the namespace and ECB exchange conversion built in.
+`calculator-cli` opens an embedded Python console with `mpmath` loaded into the namespace and ECB exchange conversion built in.
 
 ## REPL Usage
 
