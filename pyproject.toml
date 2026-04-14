@@ -1,10 +1,28 @@
 [project]
 name = "calculator-cli"
 version = "1.0.0"
-description = "A calculator CLI application based on Python and mpmath"
+description = "A calculator REPL CLI with mpmath and ECB exchange rates"
 readme = "README.md"
 requires-python = ">=3.13"
+license = "Apache-2.0"
+authors = [ { name = "Alessandro Romancino" } ]
+keywords = ["calculator", "cli", "repl", "mpmath", "exchange-rates", "python", "cli-app"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Utilities",
+]
 dependencies = ["mpmath>=1.4.1"]
+
+[project.urls]
+Repository = "https://github.com/alex180500/calculator-cli"
+Issues = "https://github.com/alex180500/calculator-cli/issues"
+Changelog = "https://github.com/alex180500/calculator-cli/releases"
 
 [project.scripts]
 calculator = "calculator_cli.cli:main"
