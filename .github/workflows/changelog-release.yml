@@ -63,7 +63,7 @@ jobs:
             "version": "${{ steps.version_check.outputs.current_version }}",
             "linkCompare": true
           }
-EOF
+          EOF
 
           npx conventional-changelog -p conventionalcommits -r 1 --stdout -i /dev/null -c conventional-changelog-context.json > release-notes.md
 
