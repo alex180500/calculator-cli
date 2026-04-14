@@ -35,6 +35,8 @@ jobs:
           git checkout "$tag_name"
           echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
           echo "release_version=${tag_name#v}" >> "$GITHUB_OUTPUT"
+          previous_tag="$(git describe --tags --abbrev=0 --match 'v*' "${tag_name}^" 2>/dev/null || true)"
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,19 +53,50 @@ jobs:
         id: changelog
         shell: bash
         env:
+          TAG_NAME: ${{ steps.release_tag.outputs.tag_name }}
+          PREVIOUS_TAG: ${{ steps.release_tag.outputs.previous_tag }}
           RELEASE_VERSION: ${{ steps.release_tag.outputs.release_version }}
         run: |
-          notes="$(npx conventional-changelog -p conventionalcommits -r 1 --tag-prefix v)"
-          notes="$(printf '%s\n' "$notes" | awk -v version="$RELEASE_VERSION" '
-            index($0, "release " version) == 0 &&
-            index($0, "release: " version) == 0
-          ')"
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import { ConventionalChangelog } from 'conventional-changelog';
 
-          {
-            echo "notes<<EOF"
-            printf '%s\n' "$notes"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          const tagName = process.env.TAG_NAME;
+          const previousTag = process.env.PREVIOUS_TAG || '';
+          const releaseVersion = process.env.RELEASE_VERSION;
+          const delimiter = `EOF_${crypto.randomUUID()}`;
+
+          const generator = new ConventionalChangelog()
+            .loadPreset('conventionalcommits')
+            .readRepository()
+            .tags({ prefix: 'v' })
+            .context({
+              currentTag: tagName,
+              previousTag: previousTag || null,
+              version: releaseVersion,
+              linkCompare: Boolean(previousTag),
+            })
+            .options({
+              releaseCount: 1,
+              outputUnreleased: false,
+            })
+            .commits(
+              previousTag
+                ? { from: previousTag, to: tagName }
+                : { to: tagName },
+            );
+
+          let notes = '';
+          for await (const chunk of generator.write()) {
+            notes += chunk;
+          }
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `notes<<${delimiter}\n${notes}\n${delimiter}\n`,
+          );
+NODE
           echo "✅ Release notes generated."
 
       - name: Create GitHub release
