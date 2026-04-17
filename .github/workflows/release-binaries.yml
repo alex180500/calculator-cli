@@ -61,10 +61,10 @@ jobs:
           - runner: windows-latest
             asset_name: calculator-windows-x86_64.zip
             archive_format: zip
-          - runner: macos-13
+          - runner: macos-15-intel
             asset_name: calculator-macos-x86_64.tar.gz
             archive_format: tar.gz
-          - runner: macos-14
+          - runner: macos-15
             asset_name: calculator-macos-arm64.tar.gz
             archive_format: tar.gz
     steps:
