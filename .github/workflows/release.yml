@@ -18,6 +18,7 @@ jobs:
     environment:
       name: pypi
     permissions:
+      actions: write
       id-token: write
       contents: read
     steps:
@@ -54,3 +55,25 @@ jobs:
       - name: Publish
         if: steps.pypi_check.outputs.already_published != 'true'
         run: uv publish
+
+      - name: Dispatch binary release workflow
+        if: steps.pypi_check.outputs.already_published != 'true'
+        uses: actions/github-script@v9
+        env:
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const workflowId = "release-binaries.yml";
+            const ref = context.payload.repository?.default_branch ?? "main";
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: workflowId,
+              ref,
+              inputs: {
+                git_ref: process.env.TAG_NAME,
+              },
+            });

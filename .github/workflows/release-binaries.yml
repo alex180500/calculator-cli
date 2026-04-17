@@ -1,11 +1,6 @@
 name: "Release Binaries"
 
 on:
-  workflow_run:
-    workflows:
-      - "Release"
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       git_ref:
@@ -15,7 +10,6 @@ on:
 
 jobs:
   meta:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       source_ref: ${{ steps.meta.outputs.source_ref }}
@@ -27,9 +21,7 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          $sourceRef = if ("${{ github.event_name }}" -eq "workflow_run") {
-            "${{ github.event.workflow_run.head_sha }}"
-          } elseif ("${{ github.event.inputs.git_ref }}" -ne "") {
+          $sourceRef = if ("${{ github.event.inputs.git_ref }}" -ne "") {
             "${{ github.event.inputs.git_ref }}"
           } else {
             "${{ github.sha }}"
