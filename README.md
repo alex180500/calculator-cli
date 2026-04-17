@@ -1,6 +1,60 @@
 # calculator-cli
 
-`calculator-cli` opens an embedded Python console with `mpmath` loaded into the namespace and ECB exchange conversion built in.
+`calculator-cli` opens an embedded Python console with `mpmath` loaded into the namespace and ECB exchange conversion built in. The package is available on PyPI at [calculator-cli](https://pypi.org/project/calculator-cli/).
+
+## Downloads
+
+Latest release is on [GitHub Releases](https://github.com/alex180500/calculator-cli/releases/latest). Standalone binaries are available for Windows, macOS, and Linux:
+
+- [Windows x86_64 binary](https://github.com/alex180500/calculator-cli/releases/latest/download/calculator-windows-x86_64.zip)
+- [macOS arm64 binary](https://github.com/alex180500/calculator-cli/releases/latest/download/calculator-macos-arm64.tar.gz)
+- [macOS x86_64 binary](https://github.com/alex180500/calculator-cli/releases/latest/download/calculator-macos-x86_64.tar.gz)
+- [Linux x86_64 binary](https://github.com/alex180500/calculator-cli/releases/latest/download/calculator-linux-x86_64.tar.gz)
+
+Each archive contains both commands:
+
+- `calculator`
+- `c`
+
+After downloading, you can extract the archive and either run the binaries directly or move them to a directory in your `PATH`.
+
+> [!IMPORTANT]
+> Standalone binaries are built with PyInstaller and published to the latest GitHub release. On macOS and Linux, extract the archive and run `chmod +x calculator c` before the first launch if needed.
+
+Examples:
+
+```powershell
+calculator.exe --help
+c.exe
+```
+
+```bash
+chmod +x calculator c
+./calculator --help
+./c
+```
+
+---
+
+It's also possible to install the package with `pip`
+
+```bash
+pip install calculator-cli
+```
+
+## Run
+
+You can run the REPL with
+
+```bash
+calculator
+```
+
+Help message
+
+```bash
+calculator --help
+```
 
 ## REPL Usage
 
@@ -36,26 +90,6 @@ refresh_exchange()
 116.84 USD [on 2026-04-13]
 ```
 
-## Run
-
-```bash
-uv run calculator
-uv run c
-```
-
-Help:
-
-```bash
-uv run calculator --help
-```
-
-Custom cache directory:
-
-```bash
-uv run calculator --cache ./cache
-```
-
-
 ## Exchange cache
 
 On every startup the app runs `refresh_exchange()`.
@@ -70,15 +104,22 @@ Default cache location:
 - Windows: `%LOCALAPPDATA%\calculator-cli\ecb_rates.json`
 - Unix-like systems: `${XDG_CACHE_HOME:-~/.cache}/calculator-cli/ecb_rates.json`
 
+You can also specify a custom cache location with the `--cache` option
+
+```bash
+calculator --cache ./cache
+```
 
 ## Local Install
 
 ```bash
+git clone https://github.com/alex180500/calculator-cli.git
+cd calculator-cli
 uv sync
-
-uv run calculator
 ```
+
+Then you can run the REPL with `uv run calculator` or `uv run c`.
 
 ## License
 
-This package is distributed under the [Apache-2.0 License](LICENSE).
+This package is distributed under [Apache-2.0 License](LICENSE). **This means that you can use the code freely for academic, personal, or commercial purposes!** _If you use my code extensively, I would greatly appreciate if you could credit me by linking my GitHub profile [`@alex180500`](https://github.com/alex180500) or just reference me (Alessandro Romancino) in any way._
