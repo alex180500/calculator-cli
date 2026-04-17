@@ -146,14 +146,15 @@ jobs:
       - name: Upload assets to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ needs.meta.outputs.tag_name }}
           TARGET_SHA: ${{ needs.meta.outputs.source_sha }}
         shell: bash
         run: |
-          if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release create "$TAG_NAME" --target "$TARGET_SHA" --title "$TAG_NAME" --notes ""
+          if ! gh release view "$TAG_NAME" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" --repo "$GH_REPO" --target "$TARGET_SHA" --title "$TAG_NAME" --notes ""
           fi
 
           find release-assets -type f -print0 | while IFS= read -r -d '' file; do
-            gh release upload "$TAG_NAME" "$file" --clobber
+            gh release upload "$TAG_NAME" "$file" --repo "$GH_REPO" --clobber
           done
